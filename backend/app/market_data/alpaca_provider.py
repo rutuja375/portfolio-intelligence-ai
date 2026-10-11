@@ -7,6 +7,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from dotenv import load_dotenv
 
+from app.market_data.sessions import filter_regular_session
 from app.market_data.validation import validate_bars
 
 
@@ -40,6 +41,12 @@ def main():
 
     validate_bars(bars)
     print("Market data validation passed!")
+    regular_bars = filter_regular_session(bars)
+    validate_bars(regular_bars)
+
+    print(f"Total retrieved bars: {len(bars)}")
+    print(f"Regular-session bars: {len(regular_bars)}")
+    print(f"Excluded bars: {len(bars) - len(regular_bars)}")
 
     print(f"Retrieved {len(bars)} NVDA minute bars")
 
