@@ -23,14 +23,17 @@ def main():
     if not api_key or not secret_key:
         raise ValueError("Missing Alpaca API credentials in .env")
 
-    # Retrieve historical market data without placing trades.
+    # This client retrieves market data; it does not place trades.
     client = StockHistoricalDataClient(api_key, secret_key)
 
+    # Request a completed historical window.
     end = datetime.now(UTC) - timedelta(days=1)
     start = end - timedelta(days=7)
 
+    symbols = ["NVDA", "AAPL", "MSFT"]
+
     request = StockBarsRequest(
-        symbol_or_symbols="NVDA",
+        symbol_or_symbols=symbols,
         timeframe=TimeFrame.Minute,
         start=start,
         end=end,
@@ -38,23 +41,34 @@ def main():
     )
 
     response = client.get_stock_bars(request)
-    bars = response.data.get("NVDA", [])
 
-    # Validate and filter the retrieved bars.
-    validate_bars(bars)
-    print("Market data validation passed!")
+    # Validate and filter market data separately for each stock.
+    regular_bars_by_symbol = {}
 
-    regular_bars = filter_regular_session(bars)
-    validate_bars(regular_bars)
+    print("\nMulti-stock market data summary:")
 
-    print(f"Total retrieved bars: {len(bars)}")
-    print(f"Regular-session bars: {len(regular_bars)}")
-    print(f"Excluded bars: {len(bars) - len(regular_bars)}")
+    for symbol in symbols:
+        bars = response.data.get(symbol, [])
 
-    # Display the first five regular-session OHLCV bars.
+        validate_bars(bars)
+
+        regular_bars = filter_regular_session(bars)
+        validate_bars(regular_bars)
+
+        regular_bars_by_symbol[symbol] = regular_bars
+
+        print(
+            f"{symbol}: retrieved {len(bars)} bars, "
+            f"regular-session {len(regular_bars)}, "
+            f"excluded {len(bars) - len(regular_bars)}"
+        )
+
+    # Display the first five regular-session NVDA bars.
+    nvda_bars = regular_bars_by_symbol["NVDA"]
+
     print("\nFirst five regular-session NVDA bars:")
 
-    for bar in regular_bars[:5]:
+    for bar in nvda_bars[:5]:
         print(
             f"{bar.timestamp} | "
             f"Open: {bar.open} | "
@@ -64,12 +78,12 @@ def main():
             f"Volume: {bar.volume}"
         )
 
-    # Calculate returns for consecutive one-minute bars.
+    # Calculate returns for consecutive NVDA one-minute bars.
     print("\nFirst five NVDA minute-level returns:")
 
     printed = 0
 
-    for previous_bar, current_bar in pairwise(regular_bars):
+    for previous_bar, current_bar in pairwise(nvda_bars):
         time_difference = (
             current_bar.timestamp - previous_bar.timestamp
         )
@@ -93,7 +107,7 @@ def main():
         if printed == 5:
             break
 
-    print("\nReturn calculation completed!")
+    print("\nMarket data retrieval and return calculation completed!")
 
 
 if __name__ == "__main__":
