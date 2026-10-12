@@ -13,24 +13,16 @@ from app.market_data.sessions import filter_regular_session
 from app.market_data.validation import validate_bars
 
 
-def main():
-    # Load API credentials from the project's .env file.
-    load_dotenv()
+def fetch_regular_session_bars(
+    client: StockHistoricalDataClient,
+    symbols: list[str],
+    start: datetime,
+    end: datetime,
+) -> dict:
+    """Retrieve, validate, and filter minute bars for multiple stocks."""
 
-    api_key = os.getenv("ALPACA_API_KEY")
-    secret_key = os.getenv("ALPACA_SECRET_KEY")
-
-    if not api_key or not secret_key:
-        raise ValueError("Missing Alpaca API credentials in .env")
-
-    # This client retrieves market data; it does not place trades.
-    client = StockHistoricalDataClient(api_key, secret_key)
-
-    # Request a completed historical window.
-    end = datetime.now(UTC) - timedelta(days=1)
-    start = end - timedelta(days=7)
-
-    symbols = ["NVDA", "AAPL", "MSFT"]
+    if not symbols:
+        raise ValueError("At least one stock symbol is required")
 
     request = StockBarsRequest(
         symbol_or_symbols=symbols,
@@ -42,10 +34,7 @@ def main():
 
     response = client.get_stock_bars(request)
 
-    # Validate and filter market data separately for each stock.
     regular_bars_by_symbol = {}
-
-    print("\nMulti-stock market data summary:")
 
     for symbol in symbols:
         bars = response.data.get(symbol, [])
@@ -57,13 +46,45 @@ def main():
 
         regular_bars_by_symbol[symbol] = regular_bars
 
+    return regular_bars_by_symbol
+
+
+def main():
+    # Load API credentials from the project's .env file.
+    load_dotenv()
+
+    api_key = os.getenv("ALPACA_API_KEY")
+    secret_key = os.getenv("ALPACA_SECRET_KEY")
+
+    if not api_key or not secret_key:
+        raise ValueError("Missing Alpaca API credentials in .env")
+
+    # Historical data client; does not place trades.
+    client = StockHistoricalDataClient(api_key, secret_key)
+
+    # Request a completed historical window.
+    end = datetime.now(UTC) - timedelta(days=1)
+    start = end - timedelta(days=7)
+
+    symbols = ["NVDA", "AAPL", "MSFT"]
+
+    # Retrieve validated, regular-session data.
+    regular_bars_by_symbol = fetch_regular_session_bars(
+        client=client,
+        symbols=symbols,
+        start=start,
+        end=end,
+    )
+
+    print("\nMulti-stock regular-session data summary:")
+
+    for symbol in symbols:
         print(
-            f"{symbol}: retrieved {len(bars)} bars, "
-            f"regular-session {len(regular_bars)}, "
-            f"excluded {len(bars) - len(regular_bars)}"
+            f"{symbol}: "
+            f"{len(regular_bars_by_symbol[symbol])} regular-session bars"
         )
 
-    # Display the first five regular-session NVDA bars.
+    # Display the first five NVDA bars.
     nvda_bars = regular_bars_by_symbol["NVDA"]
 
     print("\nFirst five regular-session NVDA bars:")
@@ -78,7 +99,7 @@ def main():
             f"Volume: {bar.volume}"
         )
 
-    # Calculate returns for consecutive NVDA one-minute bars.
+    # Calculate returns between consecutive observed minutes.
     print("\nFirst five NVDA minute-level returns:")
 
     printed = 0
