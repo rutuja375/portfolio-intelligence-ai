@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: portfolio-intelligence-ai
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_PATH
+        value: /app/data/investigations.db
+    disk:
+      name: investigation-data
+      mountPath: /app/data
+      sizeGB: 1
