@@ -36,3 +36,37 @@ def test_background_investigation_round_trip(tmp_path, monkeypatch):
     record = client.get(f"/v1/investigations/{response.json()['id']}").json()
     assert record["status"] == "completed"
     assert record["result"]["events"][0]["explanation"]["abstained"] is True
+
+
+def test_portfolio_dashboard_job_round_trip(tmp_path, monkeypatch):
+    from app.api import main
+    from app.persistence import InvestigationStore
+
+    monkeypatch.setattr(main, "store", InvestigationStore(tmp_path / "portfolio.db"))
+    monkeypatch.setattr(
+        main,
+        "run_live_portfolio_investigation",
+        lambda **kwargs: {
+            "status": "no_anomaly",
+            "summary": {"observations": 10, "anomalies": 0},
+            "events": [],
+        },
+    )
+    client = TestClient(main.app)
+    response = client.post(
+        "/v1/portfolio-investigations",
+        json={
+            "holdings": [
+                {"symbol": "AAPL", "weight": 0.6},
+                {"symbol": "MSFT", "weight": 0.4},
+            ],
+            "start": "2026-01-02T00:00:00Z",
+            "end": "2026-01-03T00:00:00Z",
+            "window": 30,
+            "threshold": 3.5,
+        },
+    )
+    assert response.status_code == 202
+    record = client.get(f"/v1/investigations/{response.json()['id']}").json()
+    assert record["status"] == "completed"
+    assert record["result"]["status"] == "no_anomaly"
