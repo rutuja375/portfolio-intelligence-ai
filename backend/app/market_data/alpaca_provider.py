@@ -9,6 +9,7 @@ from alpaca.data.timeframe import TimeFrame
 from dotenv import load_dotenv
 
 from app.analytics.returns import calculate_simple_return
+from app.market_data.alignment import align_bars_by_timestamp
 from app.market_data.sessions import filter_regular_session
 from app.market_data.validation import validate_bars
 
@@ -76,6 +77,7 @@ def main():
         end=end,
     )
 
+    
     print("\nMulti-stock regular-session data summary:")
 
     for symbol in symbols:
@@ -84,8 +86,35 @@ def main():
             f"{len(regular_bars_by_symbol[symbol])} regular-session bars"
         )
 
+    # Align all stocks using their actual timestamps.
+    aligned_prices = align_bars_by_timestamp(regular_bars_by_symbol)
+
+    total_timestamps = len(aligned_prices)
+
+    complete_timestamps = sum(
+        all(price is not None for price in prices.values())
+        for prices in aligned_prices.values()
+    )
+
+    incomplete_timestamps = total_timestamps - complete_timestamps
+
+    print("\nMulti-stock timestamp alignment summary:")
+    print(f"Total observed timestamps: {total_timestamps}")
+    print(f"Complete timestamps: {complete_timestamps}")
+    print(f"Incomplete timestamps: {incomplete_timestamps}")
+
+    if total_timestamps:
+        coverage = complete_timestamps / total_timestamps * 100
+        print(f"Complete timestamp coverage: {coverage:.2f}%")
+
+    print("\nFirst five aligned timestamps:")
+
+    for timestamp, prices in list(aligned_prices.items())[:5]:
+        print(f"{timestamp} | {prices}")
+
     # Display the first five NVDA bars.
     nvda_bars = regular_bars_by_symbol["NVDA"]
+
 
     print("\nFirst five regular-session NVDA bars:")
 
