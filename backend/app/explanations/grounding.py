@@ -12,6 +12,24 @@ class TextGenerator(Protocol):
     def generate(self, *, system: str, prompt: str) -> str: ...
 
 
+class OpenAIResponsesGenerator:
+    """Optional OpenAI Responses API adapter; the API key stays in the environment."""
+
+    def __init__(self, model: str = "gpt-5-mini", client=None) -> None:
+        if client is None:
+            from openai import OpenAI
+
+            client = OpenAI()
+        self.client = client
+        self.model = model
+
+    def generate(self, *, system: str, prompt: str) -> str:
+        response = self.client.responses.create(
+            model=self.model, instructions=system, input=prompt
+        )
+        return response.output_text
+
+
 @dataclass(frozen=True)
 class Explanation:
     summary: str

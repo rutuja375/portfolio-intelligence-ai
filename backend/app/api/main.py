@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from app.investigation import investigate_movement
 from app.persistence import InvestigationStore
 
 app = FastAPI(title="Portfolio Intelligence AI", version="0.2.0")
-store = InvestigationStore()
+store = InvestigationStore(os.getenv("DATABASE_PATH", "data/investigations.db"))
 
 
 class ReturnPoint(BaseModel):
@@ -43,7 +44,9 @@ def _run(identifier: str, request: dict) -> None:
         request["observations"] = [
             (item["timestamp"], item["value"]) for item in request["observations"]
         ]
-        request["articles"] = [Article(**item) for item in request["articles"]]
+        request["articles"] = [
+            Article(**{**item, "url": str(item["url"])}) for item in request["articles"]
+        ]
         store.update(identifier, status="running")
         result = investigate_movement(**request)
         store.update(identifier, status="completed", result=result)
