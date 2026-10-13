@@ -9,6 +9,7 @@ from alpaca.data.timeframe import TimeFrame
 from dotenv import load_dotenv
 
 from app.analytics.returns import calculate_simple_return
+from app.analytics.timeseries import calculate_synchronized_portfolio_returns
 from app.market_data.alignment import align_bars_by_timestamp
 from app.market_data.sessions import filter_regular_session
 from app.market_data.validation import validate_bars
@@ -111,6 +112,44 @@ def main():
 
     for timestamp, prices in list(aligned_prices.items())[:5]:
         print(f"{timestamp} | {prices}")
+
+    
+    # Define our hypothetical three-stock portfolio.
+    portfolio_weights = {
+        "NVDA": 0.40,
+        "AAPL": 0.35,
+        "MSFT": 0.25,
+    }
+
+    # Calculate returns using only fully observed consecutive minutes.
+    portfolio_results = calculate_synchronized_portfolio_returns(
+        aligned_prices,
+        portfolio_weights,
+    )
+
+    print("\nSynchronized portfolio return summary:")
+    print(f"Valid one-minute intervals: {len(portfolio_results)}")
+
+    print("\nFirst five portfolio return observations:")
+
+    for result in portfolio_results[:5]:
+        print(f"\nTimestamp: {result['timestamp']}")
+
+        for symbol in portfolio_weights:
+            stock_return = result["stock_returns"][symbol]
+            contribution = result["contributions"][symbol]
+
+            print(
+                f"{symbol}: "
+                f"Return = {stock_return:+.4%}, "
+                f"Contribution = {contribution:+.4%}"
+            )
+
+        print(
+            f"Portfolio return: "
+            f"{result['portfolio_return']:+.4%}"
+        )
+
 
     # Display the first five NVDA bars.
     nvda_bars = regular_bars_by_symbol["NVDA"]
