@@ -45,10 +45,13 @@ python -m ruff check backend
 uvicorn app.api.main:app --reload
 ```
 
-Open <http://localhost:8000> for the dashboard or <http://localhost:8000/docs>
-for the API. `POST /v1/investigations` accepts validated historical return
-observations and timestamped evidence; poll the returned ID at
-`GET /v1/investigations/{id}`.
+Open <http://localhost:8000> for the interactive dashboard or
+<http://localhost:8000/docs> for the API. The dashboard accepts portfolio symbols,
+weights, dates, and anomaly sensitivity, then retrieves Alpaca IEX bars and news,
+polls the background job, and renders performance, data quality, contributors,
+market context, evidence, and the grounded explanation. The lower-level
+`POST /v1/investigations` endpoint remains available for supplied return observations;
+poll either workflow at `GET /v1/investigations/{id}`.
 
 Run `python scripts/demo.py` for an offline control-flow demo. Its values and article
 are illustrative fixtures, not market observations or evidence about a real security.
