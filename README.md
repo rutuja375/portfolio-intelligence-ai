@@ -1,7 +1,7 @@
 # Portfolio Intelligence AI
 
-An investigation-oriented MVP for answering: **what moved a historical portfolio,
-what was unusual, and what public evidence was available at that time?** It is a
+An investigation-oriented MVP for answering: **what moved a portfolio, what was
+unusual, and what public evidence was available at that time?** It is a
 research aid, not investment advice and not a causal inference engine.
 
 ## What is implemented
@@ -9,11 +9,14 @@ research aid, not investment advice and not a causal inference engine.
 - Alpaca IEX minute-bar retrieval with exchange-calendar filtering and OHLCV validation.
 - Timestamp alignment that preserves missing values; prices are never forward-filled or invented.
 - Contributions, synchronized portfolio returns, compounding, and data-quality diagnostics.
-- Leakage-free rolling median/MAD anomalies plus market beta and sector-relative context.
+- Leakage-free 1/5/15-minute signals with rolling MAD, volatility adjustment,
+  abnormal-volume confirmation, and nearby-signal event grouping.
+- Company-news, broader-market-context, and evidence-free abstention branches.
 - Time-gated Alpaca news retrieval and transparent symbol/keyword/recency ranking.
 - Grounded explanations with `[E#]` citations, uncertainty, validation, and abstention.
 - Optional FinBERT, OpenAI Responses API generation, and LangGraph orchestration.
-- FastAPI, dashboard, SQLite persistence, background jobs, tests, Docker, CI, and Render config.
+- FastAPI, auto-refreshing saved-portfolio dashboard, SQLite persistence, background
+  jobs, tests, Docker, CI, and Render config.
 
 ## Architecture
 
@@ -47,9 +50,10 @@ uvicorn app.api.main:app --reload
 
 Open <http://localhost:8000> for the interactive dashboard or
 <http://localhost:8000/docs> for the API. The dashboard accepts portfolio symbols,
-weights, dates, and anomaly sensitivity, then retrieves Alpaca IEX bars and news,
-polls the background job, and renders performance, data quality, contributors,
-market context, evidence, and the grounded explanation. The lower-level
+weights and anomaly sensitivity, then evaluates the most recent three-day rolling
+window once per minute. The browser saves the portfolio locally and automatically
+resumes monitoring on a return visit. It renders performance, data quality,
+contributors, market context, evidence, and the grounded explanation. The lower-level
 `POST /v1/investigations` endpoint remains available for supplied return observations;
 poll either workflow at `GET /v1/investigations/{id}`.
 
@@ -79,6 +83,9 @@ Actions runs lint, tests, and a container build; it does not publish or deploy i
 ## Reliability boundaries
 
 - IEX is a limited US-equity feed and can differ from consolidated SIP data.
+- Current monitoring uses one-minute REST snapshots, not a continuously open Alpaca
+  WebSocket. A browser must remain open for automatic refresh; server-side always-on
+  monitoring and alerts remain a later milestone.
 - Fixed weights do not model trades, cash flows, fees, slippage, taxes, or corporate actions.
 - Provider news timestamps and tags can be imperfect; timing does not prove reaction or cause.
 - Statistical anomalies identify unusual observations, not causes.

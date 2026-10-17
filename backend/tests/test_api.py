@@ -70,3 +70,35 @@ def test_portfolio_dashboard_job_round_trip(tmp_path, monkeypatch):
     record = client.get(f"/v1/investigations/{response.json()['id']}").json()
     assert record["status"] == "completed"
     assert record["result"]["status"] == "no_anomaly"
+
+
+def test_monitor_snapshot_uses_current_rolling_window(tmp_path, monkeypatch):
+    from app.api import main
+    from app.persistence import InvestigationStore
+
+    captured = {}
+
+    def fake_monitor(**kwargs):
+        captured.update(kwargs)
+        return {
+            "status": "no_anomaly",
+            "summary": {"observations": 10, "anomalies": 0},
+            "events": [],
+        }
+
+    monkeypatch.setattr(main, "store", InvestigationStore(tmp_path / "monitor.db"))
+    monkeypatch.setattr(main, "run_live_portfolio_investigation", fake_monitor)
+    response = TestClient(main.app).post(
+        "/v1/portfolio-monitor/snapshot",
+        json={
+            "holdings": [{"symbol": "AAPL", "weight": 1.0}],
+            "horizons": [1, 5, 15],
+        },
+    )
+    assert response.status_code == 202
+    record = TestClient(main.app).get(
+        f"/v1/investigations/{response.json()['id']}"
+    ).json()
+    assert record["status"] == "completed"
+    assert captured["end"] - captured["start"] == timedelta(days=3)
+    assert captured["confirmation_horizon"] == 5

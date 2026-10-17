@@ -15,6 +15,10 @@ def run_live_portfolio_investigation(
     end: datetime,
     window: int = 30,
     threshold: float = 3.5,
+    horizons: tuple[int, ...] = (1, 5, 15),
+    confirmation_horizon: int = 5,
+    volatility_threshold: float = 2.0,
+    volume_threshold: float = 1.5,
 ) -> dict:
     """Retrieve Alpaca IEX bars/news and run a historical portfolio investigation."""
     api_key = os.getenv("ALPACA_API_KEY")
@@ -35,7 +39,7 @@ def run_live_portfolio_investigation(
     bars_by_symbol = {symbol: all_bars[symbol] for symbol in symbols}
     news = list(
         AlpacaNewsProvider(NewsClient(api_key, secret_key)).search(
-            symbols, start, end
+            requested_symbols, start, end
         )
     )
     return investigate_portfolio_history(
@@ -46,4 +50,8 @@ def run_live_portfolio_investigation(
         sector_bars=all_bars["QQQ"],
         window=window,
         threshold=threshold,
+        horizons=horizons,
+        confirmation_horizon=confirmation_horizon,
+        volatility_threshold=volatility_threshold,
+        volume_threshold=volume_threshold,
     )
