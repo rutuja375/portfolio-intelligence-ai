@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -53,6 +53,20 @@ class PortfolioInvestigationInput(BaseModel):
     end: datetime
     window: int = Field(default=30, ge=3, le=390)
     threshold: float = Field(default=3.5, gt=0)
+    horizons: tuple[int, ...] = (1, 5, 15)
+    confirmation_horizon: int = Field(default=5, ge=1, le=60)
+    volatility_threshold: float = Field(default=2.0, gt=0)
+    volume_threshold: float = Field(default=1.5, gt=0)
+
+
+class PortfolioMonitorInput(BaseModel):
+    holdings: list[HoldingInput] = Field(min_length=1, max_length=20)
+    window: int = Field(default=30, ge=3, le=390)
+    threshold: float = Field(default=3.5, gt=0)
+    horizons: tuple[int, ...] = (1, 5, 15)
+    confirmation_horizon: int = Field(default=5, ge=1, le=60)
+    volatility_threshold: float = Field(default=2.0, gt=0)
+    volume_threshold: float = Field(default=1.5, gt=0)
 
 
 def _run(identifier: str, request: dict) -> None:
@@ -105,6 +119,29 @@ def create_portfolio_investigation(
     identifier = store.create(request)
     tasks.add_task(_run_portfolio, identifier, payload.model_dump())
     return {"id": identifier, "status": "queued"}
+
+
+@app.post("/v1/portfolio-monitor/snapshot", status_code=202)
+def create_portfolio_monitor_snapshot(
+    payload: PortfolioMonitorInput, tasks: BackgroundTasks
+) -> dict:
+    """Evaluate the latest completed minute with enough history for all horizons."""
+    end = datetime.now(UTC).replace(second=0, microsecond=0)
+    request = {
+        **payload.model_dump(),
+        "start": end - timedelta(days=3),
+        "end": end,
+    }
+    identifier = store.create(
+        {
+            **payload.model_dump(mode="json"),
+            "start": request["start"].isoformat(),
+            "end": request["end"].isoformat(),
+            "mode": "monitor",
+        }
+    )
+    tasks.add_task(_run_portfolio, identifier, request)
+    return {"id": identifier, "status": "queued", "as_of": end}
 
 
 @app.get("/v1/investigations/{identifier}")
