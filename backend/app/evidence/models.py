@@ -25,3 +25,6 @@ class RankedEvidence:
     score: float
     reasons: tuple[str, ...]
     sentiment: float | None = None
+    semantic_score: float | None = None
+    reranker_score: float | None = None
+    event_tags: tuple[str, ...] = ()

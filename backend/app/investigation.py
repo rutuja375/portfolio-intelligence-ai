@@ -3,6 +3,7 @@ from datetime import datetime
 
 from app.analytics.anomalies import contextualize_return, detect_rolling_anomalies
 from app.evaluation import evaluate_explanation
+from app.evidence.ai_ranking import EvidenceAI
 from app.evidence.models import Article
 from app.evidence.retrieval import rank_evidence
 from app.explanations.grounding import TextGenerator, explain_with_evidence
@@ -18,6 +19,7 @@ def investigate_movement(
     generator: TextGenerator | None = None,
     window: int = 30,
     threshold: float = 3.5,
+    evidence_ai: EvidenceAI | None = None,
 ) -> dict:
     """Run the deterministic investigation pipeline over already validated inputs."""
     anomalies = detect_rolling_anomalies(
@@ -39,6 +41,8 @@ def investigate_movement(
         symbols=[symbol],
         event_time=event.timestamp,
         query=f"{symbol} shares outlook earnings guidance",
+        ai=evidence_ai,
+        movement_direction=1 if event.value > 0 else -1,
     )
     explanation = explain_with_evidence(asdict(event), evidence, generator)
     evaluation = evaluate_explanation(explanation, evidence, event.timestamp)
@@ -58,6 +62,10 @@ def investigate_movement(
                         "published_at": item.article.published_at,
                         "score": item.score,
                         "reasons": item.reasons,
+                        "semantic_score": item.semantic_score,
+                        "reranker_score": item.reranker_score,
+                        "sentiment": item.sentiment,
+                        "event_tags": item.event_tags,
                     }
                     for index, item in enumerate(evidence, start=1)
                 ],
