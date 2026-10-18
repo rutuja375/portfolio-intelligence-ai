@@ -48,6 +48,11 @@ def _evidence_payload(evidence: list[RankedEvidence]) -> list[dict]:
             "published_at": item.article.published_at.isoformat(),
             "url": item.article.url,
             "summary": item.article.summary,
+            "relevance_score": item.score,
+            "semantic_score": item.semantic_score,
+            "reranker_score": item.reranker_score,
+            "financial_sentiment": item.sentiment,
+            "event_tags": item.event_tags,
         }
         for index, item in enumerate(evidence, start=1)
     ]
@@ -85,7 +90,9 @@ def explain_with_evidence(
         "Event:\n" + json.dumps(event, default=str) + "\nEvidence:\n" +
         json.dumps(payload) +
         "\nReturn JSON with summary, confidence (low/medium/high), citations, limitations. "
-        "Every factual news claim must cite [E#]. Never state causation as fact."
+        "Explain the strongest supported company, sector, or market association in plain "
+        "language. Every factual news claim must cite [E#]. Never state causation as fact, "
+        "and explicitly acknowledge weak or conflicting evidence."
     )
     raw = generator.generate(
         system="You are a cautious financial research assistant grounded only in supplied evidence.",

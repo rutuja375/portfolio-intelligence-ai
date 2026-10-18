@@ -12,7 +12,8 @@ research aid, not investment advice and not a causal inference engine.
 - Leakage-free 1/5/15-minute signals with rolling MAD, volatility adjustment,
   abnormal-volume confirmation, and nearby-signal event grouping.
 - Company-news, broader-market-context, and evidence-free abstention branches.
-- Time-gated Alpaca news retrieval and transparent symbol/keyword/recency ranking.
+- Time-gated Alpaca news retrieval with optional semantic embeddings, cross-encoder
+  reranking, FinBERT sentiment, financial-event tags, and transparent hybrid scores.
 - Grounded explanations with `[E#]` citations, uncertainty, validation, and abstention.
 - Optional FinBERT, OpenAI Responses API generation, and LangGraph orchestration.
 - FastAPI, auto-refreshing saved-portfolio dashboard, SQLite persistence, background
@@ -67,7 +68,11 @@ Never commit `.env` or API keys.
 
 - `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`: required for live Alpaca IEX bars and news.
 - `OPENAI_API_KEY`: optional; otherwise use the conservative deterministic explanation.
-- Install `.[ai]` for OpenAI, FinBERT, and LangGraph. FinBERT downloads weights on first use.
+- `AI_EVIDENCE_ENABLED=true`: enables local embeddings, cross-encoder reranking, and
+  FinBERT. The first run downloads model weights and can take several minutes.
+- `OPENAI_MODEL`: model used for the optional grounded explanation (default `gpt-5-mini`).
+- Install `.[ai]` for embeddings, cross-encoder reranking, FinBERT, OpenAI, and
+  LangGraph. Local model weights download on first use.
 - SQLite is sufficient for one-process MVP use. Multi-worker deployment needs PostgreSQL and a durable queue.
 
 ## Docker and deployment
@@ -89,7 +94,10 @@ Actions runs lint, tests, and a container build; it does not publish or deploy i
 - Fixed weights do not model trades, cash flows, fees, slippage, taxes, or corporate actions.
 - Provider news timestamps and tags can be imperfect; timing does not prove reaction or cause.
 - Statistical anomalies identify unusual observations, not causes.
-- Evidence ranking is deliberately simple; FinBERT sentiment is context, not causal evidence.
+- Publication-time filtering remains deterministic and happens before all AI ranking.
+- Embedding, reranker, and FinBERT scores improve retrieval but do not prove causation.
+- With AI disabled or without an OpenAI key, the safe deterministic ranking and explanation
+  remain available. Model-loading failures are surfaced instead of silently changing modes.
 - Public news can miss macro events, filings, analyst notes, rumors, and private information.
 - In-process background tasks can be interrupted by restarts; production needs a durable queue.
 

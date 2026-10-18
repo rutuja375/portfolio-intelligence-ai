@@ -9,8 +9,9 @@ from app.analytics.event_signals import (
 from app.analytics.performance import cumulative_performance
 from app.analytics.timeseries import calculate_synchronized_portfolio_returns
 from app.evaluation import evaluate_explanation
+from app.evidence.ai_ranking import EvidenceAI
 from app.evidence.retrieval import rank_evidence
-from app.explanations.grounding import Explanation, explain_with_evidence
+from app.explanations.grounding import Explanation, TextGenerator, explain_with_evidence
 from app.market_data.alignment import align_bars_by_timestamp
 from app.market_data.quality import assess_data_quality
 
@@ -28,6 +29,8 @@ def investigate_portfolio_history(
     confirmation_horizon: int = 5,
     volatility_threshold: float = 2.0,
     volume_threshold: float = 1.5,
+    evidence_ai: EvidenceAI | None = None,
+    generator: TextGenerator | None = None,
 ) -> dict:
     """Investigate synchronized portfolio history without filling missing prices."""
     aligned = align_bars_by_timestamp(bars_by_symbol)
@@ -99,6 +102,8 @@ def investigate_portfolio_history(
             symbols=list(weights),
             event_time=signal.timestamp,
             query=" ".join(weights) + " earnings guidance outlook shares",
+            ai=evidence_ai,
+            movement_direction=1 if signal.portfolio_return > 0 else -1,
         )
         market_same_direction = market_return * signal.portfolio_return > 0
         sector_same_direction = (
@@ -117,6 +122,8 @@ def investigate_portfolio_history(
                 symbols=("SPY", "QQQ"),
                 event_time=signal.timestamp,
                 query="market economy rates inflation technology shares",
+                ai=evidence_ai,
+                movement_direction=1 if signal.portfolio_return > 0 else -1,
             )
         event_payload = {
             **signal.to_dict(),
@@ -125,7 +132,7 @@ def investigate_portfolio_history(
             "event_end": grouped["end"],
         }
         if evidence:
-            explanation = explain_with_evidence(event_payload, evidence)
+            explanation = explain_with_evidence(event_payload, evidence, generator)
         elif market_wide:
             direction = "increase" if signal.portfolio_return > 0 else "decline"
             explanation = Explanation(
@@ -191,11 +198,16 @@ def investigate_portfolio_history(
                     "published_at": item.article.published_at,
                     "score": item.score,
                     "reasons": item.reasons,
+                    "semantic_score": item.semantic_score,
+                    "reranker_score": item.reranker_score,
+                    "sentiment": item.sentiment,
+                    "event_tags": item.event_tags,
                 }
                 for index, item in enumerate(evidence, start=1)
             ],
             "explanation": asdict(explanation),
             "evaluation": asdict(evaluation),
+            "ranking_mode": "hybrid_ai" if evidence_ai is not None else "deterministic",
         })
     return response
 

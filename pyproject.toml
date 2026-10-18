@@ -25,6 +25,7 @@ dev = [
 ai = [
     "langgraph>=0.2,<2",
     "openai>=1.60,<3",
+    "sentence-transformers>=3.4,<6",
     "transformers>=4.48,<5",
     "torch>=2.5,<3"
 ]

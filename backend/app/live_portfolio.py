@@ -3,7 +3,9 @@ from datetime import datetime
 
 from alpaca.data.historical import NewsClient, StockHistoricalDataClient
 
+from app.evidence.ai_ranking import local_evidence_ai
 from app.evidence.alpaca_news import AlpacaNewsProvider
+from app.explanations.grounding import OpenAIResponsesGenerator
 from app.market_data.alpaca_provider import fetch_regular_session_bars
 from app.portfolio_investigation import investigate_portfolio_history
 
@@ -42,6 +44,15 @@ def run_live_portfolio_investigation(
             requested_symbols, start, end
         )
     )
+    ai_enabled = os.getenv("AI_EVIDENCE_ENABLED", "false").lower() in {
+        "1", "true", "yes", "on"
+    }
+    evidence_ai = local_evidence_ai() if ai_enabled else None
+    generator = None
+    if ai_enabled and os.getenv("OPENAI_API_KEY"):
+        generator = OpenAIResponsesGenerator(
+            model=os.getenv("OPENAI_MODEL", "gpt-5-mini")
+        )
     return investigate_portfolio_history(
         weights=weights,
         bars_by_symbol=bars_by_symbol,
@@ -54,4 +65,6 @@ def run_live_portfolio_investigation(
         confirmation_horizon=confirmation_horizon,
         volatility_threshold=volatility_threshold,
         volume_threshold=volume_threshold,
+        evidence_ai=evidence_ai,
+        generator=generator,
     )

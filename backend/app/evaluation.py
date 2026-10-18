@@ -11,6 +11,8 @@ class EvaluationResult:
     temporal_eligibility_rate: float
     abstention_expected: bool
     abstention_correct: bool
+    semantic_relevance_coverage: float
+    sentiment_coverage: float
 
 
 def evaluate_explanation(
@@ -32,9 +34,21 @@ def evaluate_explanation(
         else 1.0
     )
     expected = not evidence and not context_supported
+    semantic_coverage = (
+        sum(item.semantic_score is not None for item in evidence) / len(evidence)
+        if evidence
+        else 0.0
+    )
+    sentiment_coverage = (
+        sum(item.sentiment is not None for item in evidence) / len(evidence)
+        if evidence
+        else 0.0
+    )
     return EvaluationResult(
         valid_citation_rate=citation_rate,
         temporal_eligibility_rate=temporal_rate,
         abstention_expected=expected,
         abstention_correct=explanation.abstained == expected,
+        semantic_relevance_coverage=semantic_coverage,
+        sentiment_coverage=sentiment_coverage,
     )
