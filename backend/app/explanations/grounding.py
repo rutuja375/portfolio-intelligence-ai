@@ -1,7 +1,9 @@
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
+from urllib.request import Request, urlopen
 
 from app.evidence.models import RankedEvidence
 
@@ -30,6 +32,56 @@ class OpenAIResponsesGenerator:
         return response.output_text
 
 
+def _post_json(url: str, payload: dict, timeout: float) -> dict:
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+class OllamaGenerator:
+    """Local Ollama adapter with structured output and a bounded request timeout."""
+
+    provider = "ollama"
+
+    def __init__(
+        self,
+        model: str = "qwen3:4b",
+        base_url: str = "http://127.0.0.1:11434",
+        timeout: float = 120.0,
+        transport: Callable[[str, dict, float], dict] | None = None,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self._transport = transport or _post_json
+
+    def generate(self, *, system: str, prompt: str) -> str:
+        response = self._transport(
+            f"{self.base_url}/api/chat",
+            {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                "format": "json",
+                "stream": False,
+                "think": False,
+                "options": {"temperature": 0.2},
+            },
+            self.timeout,
+        )
+        content = response.get("message", {}).get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("Ollama returned no explanation content")
+        return content
+
+
 @dataclass(frozen=True)
 class Explanation:
     summary: str
@@ -37,6 +89,7 @@ class Explanation:
     citations: tuple[str, ...]
     limitations: tuple[str, ...]
     abstained: bool
+    mode: str = "deterministic"
 
 
 def _evidence_payload(evidence: list[RankedEvidence]) -> list[dict]:
@@ -94,10 +147,29 @@ def explain_with_evidence(
         "language. Every factual news claim must cite [E#]. Never state causation as fact, "
         "and explicitly acknowledge weak or conflicting evidence."
     )
-    raw = generator.generate(
-        system="You are a cautious financial research assistant grounded only in supplied evidence.",
-        prompt=prompt,
-    )
+    try:
+        raw = generator.generate(
+            system=(
+                "You are a cautious financial research assistant grounded only in "
+                "supplied evidence. Return only valid JSON."
+            ),
+            prompt=prompt,
+        )
+    except Exception:  # noqa: BLE001 - external model failure must degrade safely
+        first = payload[0]
+        return Explanation(
+            summary=(
+                f"The movement coincided with reporting from {first['source']} about "
+                f"{first['title']} [E1]. This is temporal association, not proof of cause."
+            ),
+            confidence="low",
+            citations=("E1",),
+            limitations=(
+                "The configured LLM was unavailable; a deterministic explanation was used.",
+            ),
+            abstained=False,
+            mode="deterministic_fallback",
+        )
     try:
         parsed = json.loads(raw)
         summary = str(parsed["summary"])
@@ -114,6 +186,7 @@ def explain_with_evidence(
             citations=citations,
             limitations=tuple(map(str, parsed.get("limitations", ()))),
             abstained=False,
+            mode=getattr(generator, "provider", "llm"),
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return Explanation(

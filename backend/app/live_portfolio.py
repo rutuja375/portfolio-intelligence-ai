@@ -5,7 +5,7 @@ from alpaca.data.historical import NewsClient, StockHistoricalDataClient
 
 from app.evidence.ai_ranking import local_evidence_ai
 from app.evidence.alpaca_news import AlpacaNewsProvider
-from app.explanations.grounding import OpenAIResponsesGenerator
+from app.explanations.grounding import OllamaGenerator, OpenAIResponsesGenerator
 from app.market_data.alpaca_provider import fetch_regular_session_bars
 from app.portfolio_investigation import investigate_portfolio_history
 
@@ -48,11 +48,7 @@ def run_live_portfolio_investigation(
         "1", "true", "yes", "on"
     }
     evidence_ai = local_evidence_ai() if ai_enabled else None
-    generator = None
-    if ai_enabled and os.getenv("OPENAI_API_KEY"):
-        generator = OpenAIResponsesGenerator(
-            model=os.getenv("OPENAI_MODEL", "gpt-5-mini")
-        )
+    generator = _build_generator() if ai_enabled else None
     return investigate_portfolio_history(
         weights=weights,
         bars_by_symbol=bars_by_symbol,
@@ -68,3 +64,21 @@ def run_live_portfolio_investigation(
         evidence_ai=evidence_ai,
         generator=generator,
     )
+
+
+def _build_generator():
+    provider = os.getenv("LLM_PROVIDER", "deterministic").strip().lower()
+    if provider == "ollama":
+        return OllamaGenerator(
+            model=os.getenv("OLLAMA_MODEL", "qwen3:4b"),
+            base_url=os.getenv("OLLAMA_URL", "http://127.0.0.1:11434"),
+        )
+    if provider == "openai":
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("LLM_PROVIDER=openai requires OPENAI_API_KEY")
+        return OpenAIResponsesGenerator(
+            model=os.getenv("OPENAI_MODEL", "gpt-5-mini")
+        )
+    if provider not in {"deterministic", "none"}:
+        raise ValueError("LLM_PROVIDER must be deterministic, ollama, or openai")
+    return None

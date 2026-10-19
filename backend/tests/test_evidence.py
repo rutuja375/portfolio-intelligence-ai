@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from app.evidence.ai_ranking import EvidenceAI
 from app.evidence.models import Article, RankedEvidence
 from app.evidence.retrieval import rank_evidence
-from app.explanations.grounding import explain_with_evidence
+from app.explanations.grounding import OllamaGenerator, explain_with_evidence
 
 
 def article(identifier, published_at, *, symbols=("AAPL",)):
@@ -96,3 +96,37 @@ def test_hybrid_ranking_uses_semantics_reranker_and_sentiment():
     assert ranked[0].semantic_score is not None
     assert "ai_reranked" in ranked[0].reasons
     assert ranked[0].event_tags == ("earnings", "guidance")
+
+
+def test_ollama_generator_requests_json_without_streaming():
+    captured = {}
+
+    def transport(url, payload, timeout):
+        captured.update(url=url, payload=payload, timeout=timeout)
+        return {"message": {"content": '{"summary":"Supported [E1]"}'}}
+
+    generator = OllamaGenerator(transport=transport, timeout=10)
+    result = generator.generate(system="system", prompt="prompt")
+    assert result == '{"summary":"Supported [E1]"}'
+    assert captured["url"] == "http://127.0.0.1:11434/api/chat"
+    assert captured["payload"]["model"] == "qwen3:4b"
+    assert captured["payload"]["format"] == "json"
+    assert captured["payload"]["stream"] is False
+    assert captured["timeout"] == 10
+
+
+def test_explainer_falls_back_when_local_model_is_unavailable():
+    evidence = RankedEvidence(
+        article=article("one", datetime(2026, 1, 2, 14, 0, tzinfo=UTC)),
+        score=1,
+        reasons=("symbol_match",),
+    )
+
+    class UnavailableGenerator:
+        def generate(self, **kwargs):
+            raise ConnectionError("local model is stopped")
+
+    result = explain_with_evidence({}, [evidence], UnavailableGenerator())
+    assert result.abstained is False
+    assert result.citations == ("E1",)
+    assert result.mode == "deterministic_fallback"

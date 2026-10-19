@@ -71,9 +71,33 @@ Never commit `.env` or API keys.
 - `AI_EVIDENCE_ENABLED=true`: enables local embeddings, cross-encoder reranking, and
   FinBERT. The first run downloads model weights and can take several minutes.
 - `OPENAI_MODEL`: model used for the optional grounded explanation (default `gpt-5-mini`).
+- `LLM_PROVIDER`: `deterministic`, `ollama`, or `openai`. Use `ollama` for a
+  no-API-credit local explanation.
+- `OLLAMA_URL` and `OLLAMA_MODEL`: local Ollama endpoint and model; defaults are
+  `http://127.0.0.1:11434` and `qwen3:4b`.
 - Install `.[ai]` for embeddings, cross-encoder reranking, FinBERT, OpenAI, and
   LangGraph. Local model weights download on first use.
 - SQLite is sufficient for one-process MVP use. Multi-worker deployment needs PostgreSQL and a durable queue.
+
+### Local Qwen explanation with Ollama
+
+Install Ollama for Windows, then download the local model once:
+
+```powershell
+ollama pull qwen3:4b
+```
+
+Configure `.env` and restart the API:
+
+```dotenv
+AI_EVIDENCE_ENABLED=true
+LLM_PROVIDER=ollama
+OLLAMA_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:4b
+```
+
+Ollama must be running while the API is generating an explanation. If it is
+unavailable or times out, the application returns a cited deterministic fallback.
 
 ## Docker and deployment
 
@@ -98,6 +122,7 @@ Actions runs lint, tests, and a container build; it does not publish or deploy i
 - Embedding, reranker, and FinBERT scores improve retrieval but do not prove causation.
 - With AI disabled or without an OpenAI key, the safe deterministic ranking and explanation
   remain available. Model-loading failures are surfaced instead of silently changing modes.
+- Ollama and OpenAI generation failures safely fall back to a cited deterministic explanation.
 - Public news can miss macro events, filings, analyst notes, rumors, and private information.
 - In-process background tasks can be interrupted by restarts; production needs a durable queue.
 
