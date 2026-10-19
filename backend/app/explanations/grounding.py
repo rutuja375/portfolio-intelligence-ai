@@ -27,7 +27,9 @@ class OpenAIResponsesGenerator:
 
     def generate(self, *, system: str, prompt: str) -> str:
         response = self.client.responses.create(
-            model=self.model, instructions=system, input=prompt
+            model=self.model,
+            instructions=system,
+            input=prompt,
         )
         return response.output_text
 
@@ -76,9 +78,12 @@ class OllamaGenerator:
             },
             self.timeout,
         )
+
         content = response.get("message", {}).get("content")
+
         if not isinstance(content, str) or not content.strip():
             raise ValueError("Ollama returned no explanation content")
+
         return content
 
 
@@ -117,17 +122,23 @@ def explain_with_evidence(
     generator: TextGenerator | None = None,
 ) -> Explanation:
     """Generate a cautious explanation, or abstain when evidence is insufficient."""
+
     if not evidence:
         return Explanation(
             summary="No temporally eligible evidence was found for this movement.",
             confidence="low",
             citations=(),
-            limitations=("The system cannot attribute the movement without evidence.",),
+            limitations=(
+                "The system cannot attribute the movement without evidence.",
+            ),
             abstained=True,
         )
+
     payload = _evidence_payload(evidence)
+
     if generator is None:
         first = payload[0]
+
         return Explanation(
             summary=(
                 f"The movement coincided with reporting from {first['source']} about "
@@ -135,18 +146,29 @@ def explain_with_evidence(
             ),
             confidence="medium" if len(evidence) > 1 else "low",
             citations=("E1",),
-            limitations=("Public news may omit relevant non-public or macro information.",),
+            limitations=(
+                "Public news may omit relevant non-public or macro information.",
+            ),
             abstained=False,
         )
 
     prompt = (
-        "Event:\n" + json.dumps(event, default=str) + "\nEvidence:\n" +
-        json.dumps(payload) +
-        "\nReturn JSON with summary, confidence (low/medium/high), citations, limitations. "
-        "Explain the strongest supported company, sector, or market association in plain "
-        "language. Every factual news claim must cite [E#]. Never state causation as fact, "
-        "and explicitly acknowledge weak or conflicting evidence."
+        "Event:\n"
+        + json.dumps(event, default=str)
+        + "\nEvidence:\n"
+        + json.dumps(payload)
+        + '\nReturn only valid JSON in exactly this structure: '
+        '{"summary":"Explanation with inline citation [E1].",'
+        '"confidence":"low","citations":["E1"],'
+        '"limitations":["Temporal association does not prove causation."]}. '
+        "The summary must contain at least one valid inline citation such as [E1]. "
+        "Only use citation identifiers provided in the Evidence section. "
+        "Explain the strongest supported company, sector, or market association in "
+        "plain language. Every factual news claim must cite [E#]. "
+        "Never state causation as fact, and explicitly acknowledge weak or "
+        "conflicting evidence."
     )
+
     try:
         raw = generator.generate(
             system=(
@@ -155,8 +177,9 @@ def explain_with_evidence(
             ),
             prompt=prompt,
         )
-    except Exception:  # noqa: BLE001 - external model failure must degrade safely
+    except Exception:
         first = payload[0]
+
         return Explanation(
             summary=(
                 f"The movement coincided with reporting from {first['source']} about "
@@ -165,34 +188,68 @@ def explain_with_evidence(
             confidence="low",
             citations=("E1",),
             limitations=(
-                "The configured LLM was unavailable; a deterministic explanation was used.",
+                "The configured LLM was unavailable; "
+                "a deterministic explanation was used.",
             ),
             abstained=False,
             mode="deterministic_fallback",
         )
+
     try:
         parsed = json.loads(raw)
-        summary = str(parsed["summary"])
-        citations = tuple(CITATION_PATTERN.findall(summary))
+        summary = str(parsed["summary"]).strip()
         allowed = {item["citation"] for item in payload}
+
+        inline_citations = list(CITATION_PATTERN.findall(summary))
+        declared_citations = []
+
+        for value in parsed.get("citations", []):
+            match = re.fullmatch(r"\[?(E\d+)\]?", str(value).strip())
+
+            if match:
+                declared_citations.append(match.group(1))
+
+        citations = tuple(
+            dict.fromkeys(inline_citations + declared_citations)
+        )
+
         if not citations or not set(citations) <= allowed:
             raise ValueError("Missing or invalid citations")
+
+        if not inline_citations:
+            formatted_citations = " ".join(
+                f"[{citation}]" for citation in citations
+            )
+            summary = f"{summary} {formatted_citations}"
+
         confidence = str(parsed.get("confidence", "low")).lower()
+
         if confidence not in {"low", "medium", "high"}:
             confidence = "low"
+
+        limitations_value = parsed.get("limitations", [])
+
+        if isinstance(limitations_value, str):
+            limitations = (limitations_value,)
+        else:
+            limitations = tuple(map(str, limitations_value))
+
         return Explanation(
             summary=summary,
             confidence=confidence,
             citations=citations,
-            limitations=tuple(map(str, parsed.get("limitations", ()))),
+            limitations=limitations,
             abstained=False,
             mode=getattr(generator, "provider", "llm"),
         )
+
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return Explanation(
             summary="The generated explanation failed grounding validation.",
             confidence="low",
             citations=(),
-            limitations=("Model output was malformed or contained unsupported citations.",),
+            limitations=(
+                "Model output was malformed or contained unsupported citations.",
+            ),
             abstained=True,
         )
