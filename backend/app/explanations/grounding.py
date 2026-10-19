@@ -177,7 +177,7 @@ def explain_with_evidence(
             ),
             prompt=prompt,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - external model failure must degrade safely
         first = payload[0]
 
         return Explanation(
@@ -188,9 +188,8 @@ def explain_with_evidence(
             confidence="low",
             citations=("E1",),
             limitations=(
-                "The configured LLM was unavailable; "
-                "a deterministic explanation was used.",
-            ),
+    "The configured LLM was unavailable; a deterministic explanation was used.",
+),
             abstained=False,
             mode="deterministic_fallback",
         )
